@@ -1,6 +1,7 @@
 package tcpconn
 
 import (
+	"Cluster/handler"
 	"bufio"
 	"bytes"
 	"fmt"
@@ -10,18 +11,16 @@ import (
 
 type defaultDecoder struct {
 	protocol TCPProtocol
+	IPPort   string
 }
 
 const (
 	BUFFER_SIZE = 128
 )
 
-func newDecoder() *defaultDecoder {
-	return &defaultDecoder{protocol: TCPProtocol{}}
-}
-
 //读取数据，并将其封装成事件
 func (d *defaultDecoder) createEventFromConn(conn net.Conn) {
+	d.IPPort = conn.RemoteAddr().String()
 	reader := bufio.NewReader(conn)
 	buffer := bytes.Buffer{}
 	var block [BUFFER_SIZE]byte
@@ -41,8 +40,9 @@ func (d *defaultDecoder) splitStickPackage(buffer *bytes.Buffer, block [BUFFER_S
 	for strings.Contains(string(block[start:dataSize]), EPD) {
 		end := start + strings.Index(string(block[start:dataSize]), EPD) + LEN_EPD
 		buffer.Write(block[start:end])
-		_, data := d.protocol.ParseEvent(buffer.String())
-		fmt.Println(data)
+		_, event := d.protocol.ParseEvent(buffer.String())
+		event.From = d.IPPort
+		handler.DoDistribute(*event)
 		buffer.Reset()
 		start = end
 	}

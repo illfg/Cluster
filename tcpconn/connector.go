@@ -1,14 +1,15 @@
 package tcpconn
 
 import (
+	"Cluster/handler"
 	"fmt"
 	"net"
 )
 
 //负责该链接的接收与发送，具体的操作由client完成
-type defaultConnector struct {
+type DefaultConnector struct {
 	IPPort string
-	Queue  chan Event
+	Queue  chan handler.Event
 	client *TCPClient
 }
 
@@ -16,16 +17,16 @@ const (
 	CHANNEL_SIZE = 100
 )
 
-func NewConnectorWithConn(conn net.Conn) *defaultConnector {
+func NewConnectorWithConn(conn net.Conn) *DefaultConnector {
 	return createInstance(newTCPClientWithConn(conn))
 }
-func NewConnectorWithIPPort(IPPort string) *defaultConnector {
+func NewConnectorWithIPPort(IPPort string) *DefaultConnector {
 	return createInstance(newTCPClientWithIP(IPPort))
 }
-func createInstance(client *TCPClient) *defaultConnector {
-	connector := &defaultConnector{
+func createInstance(client *TCPClient) *DefaultConnector {
+	connector := &DefaultConnector{
 		IPPort: client.conn.RemoteAddr().String(),
-		Queue:  make(chan Event, CHANNEL_SIZE),
+		Queue:  make(chan handler.Event, CHANNEL_SIZE),
 		client: client,
 	}
 	go connector.process()
@@ -33,7 +34,7 @@ func createInstance(client *TCPClient) *defaultConnector {
 }
 
 //将待发送的事件插入队列中
-func (c *defaultConnector) Send(event Event) bool {
+func (c *DefaultConnector) Send(event handler.Event) bool {
 	select {
 	case c.Queue <- event:
 		return true
@@ -43,11 +44,11 @@ func (c *defaultConnector) Send(event Event) bool {
 }
 
 //处理发送事件
-func (c *defaultConnector) process() {
+func (c *DefaultConnector) process() {
 	for {
-		event,err := <-c.Queue
-		if !err{
-			fmt.Println(c.IPPort+"chanel closed")
+		event, err := <-c.Queue
+		if !err {
+			fmt.Println(c.IPPort + "chanel closed")
 			break
 		}
 		fmt.Println("sending")
@@ -55,7 +56,7 @@ func (c *defaultConnector) process() {
 	}
 }
 
-func (c *defaultConnector) Close() {
+func (c *DefaultConnector) Close() {
 	close(c.Queue)
 	c.client.Close()
 }

@@ -1,6 +1,7 @@
 package tcpconn
 
 import (
+	"Cluster/handler"
 	"fmt"
 	"net"
 )
@@ -33,7 +34,7 @@ func newTCPClientWithIP(IPPort string) *TCPClient {
 	return newTCPClientWithConn(conn)
 }
 
-func (t *TCPClient) Send(event Event) {
+func (t *TCPClient) Send(event handler.Event) {
 	data := t.protocol.Make(event)
 	_, err := t.conn.Write([]byte(data)) // 发送数据
 	if err != nil {
