@@ -1,24 +1,28 @@
-package tcpconn
+package network
 
 import (
-	"Cluster/handler"
 	"bufio"
 	"bytes"
-	"fmt"
+	"github.com/golang/glog"
 	"net"
 	"strings"
 )
 
+type decoder interface {
+	createEventFromConn(conn net.Conn)
+}
+
 type defaultDecoder struct {
-	protocol TCPProtocol
+	protocol protocol
 	IPPort   string
 }
 
 const (
-	BUFFER_SIZE = 128
+	BUFFER_SIZE    = 128
+	decoderLogFlag = "decoder"
 )
 
-//读取数据，并将其封装成事件
+//createEventFromConn 读取数据，并将其封装成事件
 func (d *defaultDecoder) createEventFromConn(conn net.Conn) {
 	d.IPPort = conn.RemoteAddr().String()
 	reader := bufio.NewReader(conn)
@@ -27,22 +31,22 @@ func (d *defaultDecoder) createEventFromConn(conn net.Conn) {
 	for {
 		n, err := reader.Read(block[:]) // 读取数据
 		if err != nil {
-			fmt.Println("read from client failed, err: ", err)
+			glog.Error("[%s]:read from tcp conn fail,err is ", decoderLogFlag, err.Error())
 			break
 		}
 		d.splitStickPackage(&buffer, block, n)
 	}
 }
 
-//解析粘包，将解析出的数据包封装成事件
+//splitStickPackage 解析粘包，将解析出的数据包封装成事件
 func (d *defaultDecoder) splitStickPackage(buffer *bytes.Buffer, block [BUFFER_SIZE]byte, dataSize int) {
 	start := 0
 	for strings.Contains(string(block[start:dataSize]), EPD) {
 		end := start + strings.Index(string(block[start:dataSize]), EPD) + LEN_EPD
 		buffer.Write(block[start:end])
-		_, event := d.protocol.ParseEvent(buffer.String())
+		_, event := d.protocol.parseEvent(buffer.String())
 		event.From = d.IPPort
-		handler.DoDistribute(*event)
+		doReceive(*event)
 		buffer.Reset()
 		start = end
 	}
