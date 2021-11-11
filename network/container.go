@@ -3,10 +3,14 @@ package network
 import (
 	"github.com/golang/glog"
 	"net"
+	"sync"
 )
 
 //connectors 维护所有的connector，负责connector的创建
-var connectors map[string]*defaultConnector
+var (
+	connectors map[string]*defaultConnector
+	lockConn   = sync.Mutex{}
+)
 
 const containerLogFlag = "container"
 
@@ -18,13 +22,14 @@ func initContainerAndListen(IPPort string) {
 
 //Send 发送事件
 func send(IPPort string, event Event) bool {
-	connector := connectors[IPPort]
+
+	connector := getConn(IPPort)
 	if connector == nil {
-		connectors[IPPort] = newConnectorWithIPPort(IPPort)
-		if connectors[IPPort] == nil {
+		addConnector(IPPort, newConnectorWithIPPort(IPPort))
+		if getConn(IPPort) == nil {
 			return false
 		}
-		connector = connectors[IPPort]
+		connector = getConn(IPPort)
 	}
 	return connector.Send(event)
 }
@@ -36,6 +41,7 @@ func listen(IPPort string) {
 		glog.Fatalf("[%s]:Listen failed, err is %s\n", containerLogFlag, err)
 		return
 	}
+	glog.Infof("[%s]: listen on %s\n", containerLogFlag, IPPort)
 	for {
 		conn, err := listen.Accept()
 		if err != nil {
@@ -43,6 +49,22 @@ func listen(IPPort string) {
 			continue
 		}
 		glog.Infof("[%s]:accept connect[%s]", containerLogFlag, conn.RemoteAddr().String())
-		connectors[conn.RemoteAddr().String()] = newConnectorWithConn(conn)
+		addConnector(conn.RemoteAddr().String(), newConnectorWithConn(conn))
 	}
+}
+
+func getConn(IPPort string) *defaultConnector {
+	lockConn.Lock()
+	defer lockConn.Unlock()
+	return connectors[IPPort]
+}
+func addConnector(IPPort string, connector *defaultConnector) {
+	lockConn.Lock()
+	defer lockConn.Unlock()
+	connectors[IPPort] = connector
+}
+func deleteFaultyConn(IPPort string) {
+	lockConn.Lock()
+	defer lockConn.Unlock()
+	delete(connectors, IPPort)
 }

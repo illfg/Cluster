@@ -31,7 +31,8 @@ func (d *defaultDecoder) createEventFromConn(conn net.Conn) {
 	for {
 		n, err := reader.Read(block[:]) // 读取数据
 		if err != nil {
-			glog.Error("[%s]:read from tcp conn fail,err is ", decoderLogFlag, err.Error())
+			glog.Errorf("[%s]:read from tcp conn fail,err is ", decoderLogFlag, err)
+			deleteFaultyConn(d.IPPort)
 			break
 		}
 		d.splitStickPackage(&buffer, block, n)

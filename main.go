@@ -1,49 +1,50 @@
 package main
 
 import (
+	"Cluster/context"
 	"Cluster/network"
-	"flag"
 	"fmt"
+	"strconv"
 	"time"
 )
-
-type testCall struct {
-}
-
-func (c *testCall) Callback(event network.Event) {
-	fmt.Println("yes i receive response")
-	fmt.Println(event)
-}
 
 type testHandler struct {
 }
 
-func (receiver *testHandler) DoProcess() {
-	fmt.Println("init init init")
-}
-func (receiver *testHandler) PutEvent(event network.Event) {
-	fmt.Println("processing event")
-	fmt.Println(event)
+func (receiver testHandler) PutEvent(event network.Event) {
+	event.Content = ""
 	network.Send(event.From, event, nil)
 }
+func (receiver testHandler) DoProcess() {
+
+}
+
 func main() {
-	flag.Parse()
-	client()
+	//flag.Parse()
+	context.Run()
 	for {
 		time.Sleep(time.Hour)
 	}
+	client()
+	time.Sleep(time.Hour)
 }
-func server() {
-	network.InitClient("127.0.0.1:9998")
-	handler := testHandler{}
-	network.RegisterHandler("hhhhh", &handler)
-}
+
 func client() {
-	network.InitClient("127.0.0.1:9999")
-	call := testCall{}
-	network.Send("127.0.0.1:9998", network.Event{
-		EType:   network.State(1),
-		UUID:    "123456789",
-		Content: "1heartbeat heartbeat heartbeat\n",
-	}, &call)
+	network.InitClient("127.0.0.1:8888")
+	i := 1
+	for {
+		syncClient := network.SyncClient{}
+		sync := syncClient.SendSync("127.0.0.1:7777",
+			network.Event{
+				EType: network.HEARTBEAT,
+			})
+		fmt.Println(sync)
+		fmt.Println(fmt.Sprintf("Time: %s\n", strconv.Itoa(i)))
+		time.Sleep(time.Second)
+		i++
+	}
+}
+func serve() {
+	network.RegisterHandler("hhhh", testHandler{})
+	network.InitClient("127.0.0.1:7777")
 }

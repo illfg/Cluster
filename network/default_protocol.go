@@ -17,11 +17,21 @@ type defaultProtocol struct {
 }
 type Event struct {
 	EType   State
-	UUID    string
+	aUUID   string
 	Content string
 	From    string
 }
+
 type State int
+
+const (
+	PING State = 1 + iota
+	LEASE
+	VOTE
+	HEARTBEAT
+	JOIN
+	ACK
+)
 
 const (
 	SFD       = "$+$+$\n"
@@ -35,7 +45,7 @@ func (t *defaultProtocol) make(event Event) string {
 	builder := strings.Builder{}
 	builder.WriteString(SFD)
 	builder.WriteString(strconv.Itoa(int(event.EType)) + "\n")
-	builder.WriteString(event.UUID + "\n")
+	builder.WriteString(event.aUUID + "\n")
 	builder.WriteString(event.Content)
 	builder.WriteString(EPD)
 	//glog.Infof("[%s]:make event[%s]\n", protocolLogFlag, builder.String())
@@ -52,13 +62,12 @@ func (t *defaultProtocol) parseEvent(data string) (int, *Event) {
 	data = data[start:end]
 	idxState := strings.Index(data, "\n")
 	state, _ := strconv.Atoi(data[:idxState])
-
 	data = data[idxState+LEN_SPLIT:]
 	idxUUID := strings.Index(data, "\n")
 	UUID := data[:idxUUID]
 	return end + LEN_EPD, &Event{
 		EType:   State(state),
-		UUID:    UUID,
+		aUUID:   UUID,
 		Content: data[idxUUID+LEN_SPLIT:],
 	}
 }

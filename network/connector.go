@@ -66,14 +66,15 @@ func (c *defaultConnector) process() {
 	for {
 		event, err := <-c.Queue
 		if !err {
-			glog.Error("[%s]: send channel have been close\n", connectorLogFlag)
+			glog.Errorf("[%s]: send channel have been close\n", connectorLogFlag)
+			deleteFaultyConn(c.IPPort)
 			break
 		}
 		glog.Infof("[%s]: sending event[%v]\n", connectorLogFlag, event)
 		data := c.protocol.make(event)
 		_, sendErr := c.conn.Write([]byte(data)) // 发送数据
 		if sendErr != nil {
-			glog.Error("[%s]: detect err when writing data, err is %s\n", connectorLogFlag, sendErr)
+			glog.Errorf("[%s]: detect err when writing data, err is %s\n", connectorLogFlag, sendErr)
 		}
 	}
 }

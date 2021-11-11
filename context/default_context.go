@@ -1,5 +1,11 @@
 package context
 
+import (
+	"Cluster/conf"
+	"Cluster/handler"
+	"Cluster/network"
+)
+
 //
 //import "Cluster/network"
 //
@@ -32,3 +38,10 @@ package context
 //	}
 //	return ctxIns
 //}
+
+func Run() {
+	config := *conf.GetConf()
+	electionHandler := handler.ElectionHandler{InElection: false}
+	network.RegisterHandler("ElectionHandler", &electionHandler)
+	network.InitClient(config["IPPort"])
+}
