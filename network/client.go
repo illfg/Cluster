@@ -4,9 +4,10 @@ import (
 	"Cluster/conf"
 	"Cluster/utils"
 	"fmt"
-	"github.com/golang/glog"
 	"sync"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 //为事件的发送与接收提供回调
@@ -54,18 +55,18 @@ func Send(IPPort string, event Event, processor EventPostProcessor) bool {
 	}
 	if processor != nil {
 		addCallBack(event.aUUID, processor)
-		glog.Infof("[%s]:event post processor registered[UUID:%s]", clientLogFlag, event.aUUID)
+		// glog.Infof("[%s]:event post processor registered[UUID:%s]", clientLogFlag, event.aUUID)
 	}
 	addFromAddrInContent(&event)
 	return send(IPPort, event)
 }
 
-func (SyncClient) SendSync(IPPort string, event Event) Event {
+func (*SyncClient) SendSync(IPPort string, event Event) Event {
 	event.aUUID = utils.GetRand()
 	processor := SyncSendEventPostProcessor{response: make(chan Event, 8)}
 	Send(IPPort, event, &processor)
 
-	ticker := time.NewTicker(time.Second * 3)
+	ticker := time.NewTicker(time.Second / 10)
 	select {
 	case res := <-processor.response:
 		return res
@@ -82,11 +83,11 @@ func RegisterHandler(name string, eventHandler EventHandler) {
 }
 
 func doReceive(event Event) {
-	glog.Infof("[%s]:received event[%v]\n", clientLogFlag, event)
+	// glog.Infof("[%s]:received event[%v]\n", clientLogFlag, event)
 	parseFromAddrInContent(&event)
 	processor := getCallback(event.aUUID)
 	if processor != nil {
-		glog.Infof("[%s]:invoke callback[UUID:%s]", clientLogFlag, event.aUUID)
+		// glog.Infof("[%s]:invoke callback[UUID:%s]", clientLogFlag, event.aUUID)
 		go processor.Callback(event)
 		delCallBack(event.aUUID)
 	}

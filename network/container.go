@@ -1,9 +1,10 @@
 package network
 
 import (
-	"github.com/golang/glog"
 	"net"
 	"sync"
+
+	"github.com/golang/glog"
 )
 
 //connectors 维护所有的connector，负责connector的创建
@@ -22,7 +23,6 @@ func initContainerAndListen(IPPort string) {
 
 //Send 发送事件
 func send(IPPort string, event Event) bool {
-
 	connector := getConn(IPPort)
 	if connector == nil {
 		addConnector(IPPort, newConnectorWithIPPort(IPPort))
@@ -41,7 +41,7 @@ func listen(IPPort string) {
 		glog.Fatalf("[%s]:Listen failed, err is %s\n", containerLogFlag, err)
 		return
 	}
-	glog.Infof("[%s]: listen on %s\n", containerLogFlag, IPPort)
+	// glog.Infof("[%s]: listen on %s\n", containerLogFlag, IPPort)
 	for {
 		conn, err := listen.Accept()
 		if err != nil {

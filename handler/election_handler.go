@@ -3,13 +3,14 @@ package handler
 import (
 	"Cluster/conf"
 	"Cluster/network"
+	"errors"
 	"fmt"
-	"github.com/golang/glog"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 type ElectionHandler struct {
@@ -22,10 +23,6 @@ type ElectionHandler struct {
 }
 
 const electionLogFlag = "election handler"
-
-var lockPING = sync.Mutex{}
-var lockVote = sync.Mutex{}
-var lockJoin = sync.Mutex{}
 
 func (receiver *ElectionHandler) PutEvent(event network.Event) {
 	switch event.EType {
@@ -43,14 +40,11 @@ func (receiver *ElectionHandler) PutEvent(event network.Event) {
 }
 
 func (receiver *ElectionHandler) DoProcess() {
-	receiver.reElectionTime = time.Now().Add(time.Second)
 	go func() {
 		for {
 			//租约过期便发起选举
-			if time.Now().After(receiver.reElectionTime) &&
-				!receiver.isMaster && !receiver.InElection {
+			if time.Now().After(receiver.reElectionTime) && !receiver.InElection {
 				receiver.startElection()
-				receiver.reElectionTime = time.Now().Add(time.Second)
 			}
 			time.Sleep(time.Second / 5)
 		}
@@ -58,10 +52,8 @@ func (receiver *ElectionHandler) DoProcess() {
 }
 
 func (receiver *ElectionHandler) handlePINGEvent(event network.Event) {
-	lockPING.Lock()
-	defer lockPING.Unlock()
 	config := conf.GetConf()
-	glog.Infof("[%s]: receive PING event, from: %s\n", electionLogFlag, event.From)
+	// glog.Infof("[%s]: receive PING event, from: %s\n", electionLogFlag, event.From)
 	builder := strings.Builder{}
 	builder.WriteString(fmt.Sprintf("MasterCandidate: %s\n", (*config)["MasterCandidate"]))
 	builder.WriteString(fmt.Sprintf("CurrentMaster: %s\n", receiver.currentMaster))
@@ -73,7 +65,7 @@ func (receiver *ElectionHandler) handlePINGEvent(event network.Event) {
 func (receiver *ElectionHandler) handleLeaseEvent(event network.Event) {
 	glog.Infof("[%s]: receive lease event, form: %s\n", electionLogFlag, event.From)
 	//收到租约时回复应答，主节点没收到应答则说明从节点下线，从节点没收到租约则说明主节点下线
-	receiver.reElectionTime = time.Now().Add(time.Second * 5)
+	receiver.reElectionTime = time.Now().Add(time.Second * 10)
 	receiver.sendACK(event)
 	if receiver.currentMaster != event.From {
 		receiver.InElection = true
@@ -82,9 +74,7 @@ func (receiver *ElectionHandler) handleLeaseEvent(event network.Event) {
 }
 
 func (receiver *ElectionHandler) handleVoteEvent(event network.Event) {
-	lockVote.Lock()
-	defer lockVote.Unlock()
-	glog.Infof("[%s]: receive vote event, form: %s\n", electionLogFlag, event.From)
+	// glog.Infof("[%s]: receive vote event, form: %s\n", electionLogFlag, event.From)
 	receiver.votedFollower[event.From] = event.From
 	receiver.sendACK(event)
 }
@@ -97,8 +87,6 @@ func (receiver *ElectionHandler) handleVoteEvent(event network.Event) {
 //}
 
 func (receiver *ElectionHandler) handleJoinEvent(event network.Event) {
-	lockJoin.Lock()
-	defer lockJoin.Unlock()
 	glog.Infof("[%s]: receive join event, form: %s\n", electionLogFlag, event)
 	if receiver.isMaster {
 		receiver.follower[event.From] = time.Now()
@@ -128,9 +116,9 @@ func (receiver *ElectionHandler) PINGAllNodes() ([]string, string) {
 	currentMaster := ""
 
 	nodes := strings.Split((*conf.GetConf())["nodes"], ",")
-	client := network.SyncClient{}
 	for _, node := range nodes {
 		query := network.Event{EType: network.PING}
+		client := network.SyncClient{}
 		response := client.SendSync(node, query)
 		if response.Content == "" {
 			continue
@@ -169,7 +157,7 @@ func (receiver *ElectionHandler) joinToMaster(IPPort string) {
 	receiver.isMaster = false
 	receiver.InElection = false
 	receiver.currentMaster = IPPort
-	receiver.reElectionTime = time.Now().Add(time.Second)
+	receiver.reElectionTime = time.Now().Add(time.Second * 10)
 
 	//receiver.reportHeartbeat()
 	//通过租约监控健康，由定时器发起下轮选举
@@ -193,25 +181,32 @@ func (receiver *ElectionHandler) joinToMaster(IPPort string) {
 
 func (receiver *ElectionHandler) voteToMaster(IPPort string) {
 	glog.Infof("[%s]: vote to master, master addr is %s\n", electionLogFlag, IPPort)
-	receiver.sendVoteEvent(IPPort)
+	if err := receiver.sendVoteEvent(IPPort); err != nil {
+		receiver.InElection = false
+		return
+	}
 	//wait for vote
 	receiver.waitForVoteResult()
 }
-func (receiver *ElectionHandler) sendVoteEvent(IPPort string) {
+
+func (receiver *ElectionHandler) sendVoteEvent(IPPort string) error {
 	config := *conf.GetConf()
 	if config["IPPort"] == IPPort {
 		receiver.votedFollower[IPPort] = IPPort
-		return
+		return nil
 	}
 	voteEvent := network.Event{EType: network.VOTE}
 	client := network.SyncClient{}
 	response := client.SendSync(IPPort, voteEvent)
 	if response.EType != network.ACK {
 		glog.Warningf("[%s]: no reply after voted, addr is %s\n", electionLogFlag, IPPort)
+		return errors.New("unable to connect master")
 	}
+	return nil
 }
+
 func (receiver *ElectionHandler) waitForVoteResult() {
-	timer := time.Now().Add(time.Second * 30)
+	timer := time.Now().Add(time.Second * 10)
 	for {
 		total, _ := strconv.Atoi((*conf.GetConf())["total"])
 		if len(receiver.votedFollower) > total/2 {
@@ -223,12 +218,14 @@ func (receiver *ElectionHandler) waitForVoteResult() {
 			break
 		}
 		if time.Now().After(timer) {
+			glog.Info("wait for vote reuslt timeout")
 			break
 		}
 		time.Sleep(time.Second / 10)
 	}
 	receiver.InElection = false
 }
+
 func (receiver *ElectionHandler) sendLeaseToFollower() {
 	glog.Infof("[%s]: was elected master, send lease to follower\n", electionLogFlag)
 
@@ -248,17 +245,13 @@ func (receiver *ElectionHandler) sendLeaseToFollower() {
 			receiver.follower[response.From] = time.Now()
 		}
 	}
-
-	//wait follower to join
-	for i := 0; i < 5; i++ {
-		glog.Infof("[%s]: cluster info: %v\n", electionLogFlag, receiver.follower)
-		time.Sleep(time.Second * 3)
-	}
+	time.Sleep(time.Second * 3)
 
 	//maintain cluster
+	total, _ := strconv.Atoi((*conf.GetConf())["total"])
 	for {
 		glog.Infof("[%s]: cluster info: %v\n", electionLogFlag, receiver.follower)
-		total, _ := strconv.Atoi((*conf.GetConf())["total"])
+
 		if len(receiver.follower) < total/2 {
 			glog.Warningf("[%s]: less than half of total number of followers\n", electionLogFlag)
 			receiver.giveUpMaster()
@@ -289,23 +282,25 @@ func (receiver ElectionHandler) sendACK(event network.Event) {
 }
 
 func (receiver *ElectionHandler) sendLease() {
-	glog.Infof("[%s]: sending lease to follower\n", electionLogFlag)
-	go func() {
+	// glog.Infof("[%s]: sending lease to follower\n", electionLogFlag)
+	receiver.reElectionTime = time.Now().Add(time.Second * 10)
+	if !receiver.isMaster {
+		return
+	}
+	followerToDel := make([]string, 0)
+	for key, _ := range receiver.follower {
+		event := network.Event{EType: network.LEASE}
+		client := network.SyncClient{}
+		response := client.SendSync(key, event)
+		if response.EType != network.ACK {
+			followerToDel = append(followerToDel, key)
+		}
 		if !receiver.isMaster {
 			return
 		}
-		client := network.SyncClient{}
-		followerToDel := make([]string, 0)
-		for key, _ := range receiver.follower {
-			event := network.Event{EType: network.LEASE}
-			response := client.SendSync(key, event)
-			if response.EType != network.ACK {
-				followerToDel = append(followerToDel, key)
-			}
-		}
-		glog.Infof("[%s]: node with off-line: %v\n", electionLogFlag, followerToDel)
-		for _, key := range followerToDel {
-			delete(receiver.follower, key)
-		}
-	}()
+	}
+	// glog.Infof("[%s]: node with off-line: %v\n", electionLogFlag, followerToDel)
+	for _, key := range followerToDel {
+		delete(receiver.follower, key)
+	}
 }

@@ -1,8 +1,10 @@
 package network
 
 import (
-	"github.com/golang/glog"
 	"net"
+	"time"
+
+	"github.com/golang/glog"
 )
 
 //defaultConnector 负责该链接的接收与发送，提供发送缓存，具体的操作由client完成
@@ -43,7 +45,7 @@ func newConnectorWithConn(conn net.Conn) *defaultConnector {
 
 //NewConnectorWithIPPort 通过IPPort创建Connector
 func newConnectorWithIPPort(IPPort string) *defaultConnector {
-	conn, err := net.Dial("tcp", IPPort)
+	conn, err := net.DialTimeout("tcp", IPPort, time.Second/5)
 	if err != nil {
 		glog.Errorf("[%s]:established connection failed,err is %s", connectorLogFlag, err.Error())
 		return nil
@@ -70,7 +72,7 @@ func (c *defaultConnector) process() {
 			deleteFaultyConn(c.IPPort)
 			break
 		}
-		glog.Infof("[%s]: sending event[%v]\n", connectorLogFlag, event)
+		// glog.Infof("[%s]: sending event[%v]\n", connectorLogFlag, event)
 		data := c.protocol.make(event)
 		_, sendErr := c.conn.Write([]byte(data)) // 发送数据
 		if sendErr != nil {
