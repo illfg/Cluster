@@ -31,6 +31,9 @@ const (
 	HEARTBEAT
 	JOIN
 	ACK
+
+	TASK
+	RESPONSE
 )
 
 const (

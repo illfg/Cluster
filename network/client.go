@@ -61,12 +61,15 @@ func Send(IPPort string, event Event, processor EventPostProcessor) bool {
 	return send(IPPort, event)
 }
 
-func (*SyncClient) SendSync(IPPort string, event Event) Event {
+func (receiver *SyncClient) SendSync(IPPort string, event Event) Event {
+	return receiver.SendTimeout(IPPort, event, time.Second/10)
+}
+
+func (receiver *SyncClient) SendTimeout(IPPort string, event Event, timeout time.Duration) Event {
 	event.aUUID = utils.GetRand()
 	processor := SyncSendEventPostProcessor{response: make(chan Event, 8)}
 	Send(IPPort, event, &processor)
-
-	ticker := time.NewTicker(time.Second / 10)
+	ticker := time.NewTicker(timeout)
 	select {
 	case res := <-processor.response:
 		return res
