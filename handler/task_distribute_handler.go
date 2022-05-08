@@ -4,7 +4,11 @@ import (
 	"Cluster/network"
 	"container/list"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/jackdanger/collectlinks"
@@ -27,13 +31,28 @@ const (
 type TaskDistributeHandler struct {
 	queue    *list.List
 	election *ElectionHandler
+	offset   int
 }
 
-func NewTaskDistributeHandler(election *ElectionHandler) *TaskDistributeHandler {
+func NewTaskDistributeHandler(election *ElectionHandler) (*TaskDistributeHandler, error) {
+	queue := list.New()
+	b, err := os.ReadFile("task.txt")
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if line == "" {
+			continue
+		}
+		queue.PushBack(Task{
+			Status:  Default,
+			Content: line,
+		})
+	}
 	return &TaskDistributeHandler{
 		election: election,
-		queue:    list.New(),
-	}
+		queue:    queue,
+	}, nil
 }
 
 func (receiver *TaskDistributeHandler) PutEvent(event network.Event) {
@@ -44,6 +63,7 @@ func (receiver *TaskDistributeHandler) PutEvent(event network.Event) {
 	case network.TASK:
 		task := receiver.nextTask()
 		if task != nil {
+			log.Printf("[dispatch task] task sended: %v\n",task)
 			event.Content = task.Content
 			event.EType = network.ACK
 			network.Send(event.From, event, nil)
@@ -64,6 +84,7 @@ func (receiver *TaskDistributeHandler) DoProcess() {
 				time.Sleep(time.Second)
 				continue
 			}
+			log.Printf("[handle url] url to fetch: %v\n",resp.Content)
 			if err := receiver.handleTask(resp.Content); err != nil {
 				network.Send(receiver.election.CurrentMaster, network.Event{
 					EType:   network.RESPONSE,
@@ -114,6 +135,24 @@ func (receiver *TaskDistributeHandler) finishTask(content string) {
 	}
 }
 
+func (receiver *TaskDistributeHandler) queueOffset() int {
+	offset := 0
+	head := receiver.queue.Front()
+	for head != nil {
+		task, ok := head.Value.(*Task)
+		if !ok {
+			break
+		}
+		if task.Status == Finished {
+			offset++
+			head = head.Next()
+			continue
+		}
+		break
+	}
+	return offset
+}
+
 func (receiver *TaskDistributeHandler) handleTask(url string) error {
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
@@ -129,7 +168,15 @@ func (receiver *TaskDistributeHandler) handleTask(url string) error {
 		if err != nil {
 			continue
 		}
-		fmt.Print(req.Body)
+		file, err := os.Create(url)
+		if err != nil {
+			return err
+		}
+		b, err := io.ReadAll(req.Body)
+		if err != nil {
+			return err
+		}
+		file.WriteString(string(b))
 	}
 	return nil
 }

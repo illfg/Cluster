@@ -4,6 +4,7 @@ import (
 	"Cluster/conf"
 	"Cluster/handler"
 	"Cluster/network"
+	"log"
 )
 
 //
@@ -42,6 +43,11 @@ import (
 func Run() {
 	config := *conf.GetConf()
 	electionHandler := handler.ElectionHandler{InElection: false}
+	dispatchHandler, err := handler.NewTaskDistributeHandler(&electionHandler)
+	if err != nil {
+		log.Fatal(err)
+	}
 	network.RegisterHandler("ElectionHandler", &electionHandler)
+	network.RegisterHandler("TaskDistacherHandler", dispatchHandler)
 	network.InitClient(config["IPPort"])
 }
