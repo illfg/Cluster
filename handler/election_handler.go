@@ -63,7 +63,7 @@ func (receiver *ElectionHandler) handlePINGEvent(event network.Event) {
 }
 
 func (receiver *ElectionHandler) handleLeaseEvent(event network.Event) {
-	glog.Infof("[%s]: receive lease event, form: %s\n", electionLogFlag, event.From)
+	// glog.Infof("[%s]: receive lease event, form: %s\n", electionLogFlag, event.From)
 	//收到租约时回复应答，主节点没收到应答则说明从节点下线，从节点没收到租约则说明主节点下线
 	receiver.ReElectionTime = time.Now().Add(time.Second * 10)
 	receiver.sendACK(event)

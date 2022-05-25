@@ -9,7 +9,7 @@ import (
 
 //connectors 维护所有的connector，负责connector的创建
 var (
-	connectors map[string]*defaultConnector
+	connectors = make(map[string]*defaultConnector, 8)
 	lockConn   = sync.Mutex{}
 )
 
@@ -17,7 +17,6 @@ const containerLogFlag = "container"
 
 //initContainerAndListen 初始化并监听端口
 func initContainerAndListen(IPPort string) {
-	connectors = make(map[string]*defaultConnector, 8)
 	go listen(IPPort)
 }
 

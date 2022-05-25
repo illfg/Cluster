@@ -4,7 +4,8 @@ import (
 	"Cluster/conf"
 	"Cluster/handler"
 	"Cluster/network"
-	"log"
+
+	"github.com/golang/glog"
 )
 
 //
@@ -45,8 +46,9 @@ func Run() {
 	electionHandler := handler.ElectionHandler{InElection: false}
 	dispatchHandler, err := handler.NewTaskDistributeHandler(&electionHandler)
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
+	// dispatchHandler.HandleTask("http://www.cnforex.com/news/html/2020/12/31/b6552f4bbd94dde1872a28c00626c75f.html")
 	network.RegisterHandler("ElectionHandler", &electionHandler)
 	network.RegisterHandler("TaskDistacherHandler", dispatchHandler)
 	network.InitClient(config["IPPort"])

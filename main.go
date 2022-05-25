@@ -1,12 +1,9 @@
 package main
 
-import (
-	"Cluster/context"
-	"flag"
-)
+import "Cluster/context"
 
 func main() {
-	flag.Parse()
+	// flag.Parse()
 	context.Run()
 	select {}
 }

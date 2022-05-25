@@ -22,7 +22,7 @@ func ParseYaml(in string) map[string]string {
 	yMap := make(map[string]string, 8)
 	err := yaml.Unmarshal([]byte(in), yMap)
 	if err != nil {
-		glog.Warningf("[%s]:fail to parse yaml from bytes, err is %s\n", confLogFlag, err)
+		glog.Warningf("[%s]:fail to parse yaml from bytes, err is %s,in: %v\n", confLogFlag, err, in)
 		return nil
 	}
 	return yMap
